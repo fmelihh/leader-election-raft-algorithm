@@ -1,12 +1,11 @@
 import uvicorn
 from fastapi import FastAPI
 
-from src.raft_algorithm.api import RaftNodeRouter
+from src.raft_algorithm.api import raft_router
 
 app = FastAPI()
 
-raft_node_router = RaftNodeRouter(node_id=1, peers=["8001", "8002"])
-app.include_router(raft_node_router.router)
+app.include_router(raft_router, prefix="/raft", tags=["raft"])
 
 
 if __name__ == "__main__":
