@@ -1,27 +1,24 @@
 import os
+import time
+import random
 
 from ..schemas.enums import StateEnum
 
 
-class RaftNodeService:
+class RaftNode:
     def __init__(self):
-        self._id: str = os.getenv("RAFT_NODE_ID")
-        self._peers: list[str] = os.getenv("RAFT_NODE_PEERS")
-        self._state = StateEnum.FOLLOWER
+        self._id = os.getenv("RAFT_NODE_ID")
+        self._peers = [
+            f"http://localhost:{port}/raft"
+            for port in os.getenv("RAFT_NODE_PEERS").split(",")
+        ]
+
+        self.votes = 0
+        self.voted_for = None
+        self.current_term = 0
+        self.state = StateEnum.FOLLOWER
+        self.last_heartbeat = time.time()
+        self.election_timeout = random.uniform(1.0, 3.0)
 
         self._logs = []
         self._db = set()
-
-
-_raft_node = None
-
-
-def get_raft_node() -> RaftNodeService:
-    global _raft_node
-    if _raft_node is None:
-        _raft_node = RaftNodeService()
-
-    return _raft_node
-
-
-__all__ = ["get_raft_node"]
