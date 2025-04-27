@@ -6,6 +6,7 @@ import asyncio
 from loguru import logger
 
 from ..schemas.enums import StateEnum
+from ..schemas.raft import AppendEntriesRequest
 
 
 class RaftNodeService:
@@ -34,6 +35,12 @@ class RaftNodeService:
 
     async def get_item(self):
         pass
+
+    async def append_entries(self, append_term: AppendEntriesRequest):
+        if append_term.term >= self.current_term:
+            self.current_term = append_term.term
+            self.state = StateEnum.FOLLOWER
+            self.last_heartbeat = asyncio.get_event_loop().time()
 
     async def election_loop(self):
         while True:
@@ -69,16 +76,19 @@ class RaftNodeService:
             self.state = StateEnum.LEADER
             logger.info(f"{self._id} Elected Leader for term {self.current_term}")
             asyncio.create_task(self.leader_heartbeat())
+        else:
+            self.state = StateEnum.FOLLOWER
 
     async def leader_heartbeat(self):
         while self.state == StateEnum.LEADER:
             async with httpx.AsyncClient() as client:
                 for peer in self._peers:
                     try:
-                        await client.post(
+                        result = await client.post(
                             f"{peer}/append-entries",
                             json={"term": self.current_term, "leader_id": self._id},
                         )
+                        result.raise_for_status()
                     except Exception as e:
                         logger.exception(f"Error sending heartbeat to {peer}", e)
 
