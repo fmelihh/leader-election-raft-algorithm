@@ -3,10 +3,11 @@ import time
 import httpx
 import random
 import asyncio
+from typing import Any
 from loguru import logger
 
 from ..schemas.enums import StateEnum
-from ..schemas.raft import AppendEntriesRequest
+from ..schemas.raft import AppendEntriesRequest, VoteRequest
 
 
 class RaftNodeService:
@@ -37,10 +38,32 @@ class RaftNodeService:
         pass
 
     async def append_entries(self, append_term: AppendEntriesRequest):
-        if append_term.term >= self.current_term:
-            self.current_term = append_term.term
+        self.current_term = append_term.term
+        self.state = StateEnum.FOLLOWER
+        self.last_heartbeat = asyncio.get_event_loop().time()
+
+    async def request_vote(self, vote: VoteRequest) -> dict[str, Any]:
+        if vote.term > self.current_term:
+            self.current_term = vote.term
+            self.voted_for = None
             self.state = StateEnum.FOLLOWER
-            self.last_heartbeat = asyncio.get_event_loop().time()
+
+        vote_granted = False
+        if (
+            self.voted_for is None or self.voted_for == vote.candidate_id
+        ) and vote.term >= self.current_term:
+            self.voted_for = vote.candidate_id
+            vote_granted = True
+
+        return {"term": self.current_term, "vote_granted": vote_granted}
+
+    async def get_status(self) -> dict[str, Any]:
+        return {
+            "node_id": self._id,
+            "state": self.state.value,
+            "current_term": self.current_term,
+            "voted_for": self.voted_for,
+        }
 
     async def election_loop(self):
         while True:
